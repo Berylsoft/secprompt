@@ -1,0 +1,20 @@
+[package]
+name = "secprompt"
+version = "0.1.0"
+edition = "2021"
+authors = ["Conrad Kleinespel <conradk@conradk.com>", "stackinspector"]
+license = "MPL-2.0"
+repository = "https://github.com/Berylsoft/secprompt"
+
+[lib]
+name = "secprompt"
+path = "lib.rs"
+
+[dependencies]
+
+[target.'cfg(unix)'.dependencies.libc]
+version = "0.2"
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.3"
+features = ["std", "winnt", "fileapi", "processenv", "winbase", "handleapi", "consoleapi", "minwindef", "wincon"]
