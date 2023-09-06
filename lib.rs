@@ -28,7 +28,7 @@ pub fn fix_line_issues(mut line: Zeroizing<String>) -> io::Result<Zeroizing<Stri
     // Ctrl-U should remove the line in terminals
     if line.contains('\x15') {
         line = match line.rfind('\x15') {
-            Some(last_ctrl_u_index) => line[last_ctrl_u_index + 1..].to_string().into(),
+            Some(last_ctrl_u_index) => line[last_ctrl_u_index + 1..].to_owned().into(),
             None => line,
         };
     }
