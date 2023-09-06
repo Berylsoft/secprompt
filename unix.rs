@@ -1,4 +1,4 @@
-use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
+use libc::{c_int, tcgetattr, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
 use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Write},
@@ -60,7 +60,7 @@ fn io_result(ret: c_int) -> io::Result<()> {
 
 fn safe_tcgetattr(fd: c_int) -> io::Result<termios> {
     let mut term = MaybeUninit::<termios>::uninit();
-    io_result(unsafe { libc::tcgetattr(fd, term.as_mut_ptr()) })?;
+    io_result(unsafe { tcgetattr(fd, term.as_mut_ptr()) })?;
     Ok(unsafe { term.assume_init() })
 }
 
