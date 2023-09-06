@@ -10,7 +10,7 @@ use windows_sys::Win32::System::Console::{
 use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
-pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
+pub fn print_tty(prompt: &str) -> io::Result<()> {
     let handle = unsafe {
         CreateFileA(
             b"CONOUT$\x00".as_ptr(),
@@ -29,7 +29,7 @@ pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
     let mut stream = unsafe { std::fs::File::from_raw_handle(handle as *mut _) };
 
     stream
-        .write_all(prompt.to_string().as_str().as_bytes())
+        .write_all(prompt.as_bytes())
         .and_then(|_| stream.flush())
 }
 

@@ -2,9 +2,9 @@ use std::io::{self, BufRead, Write};
 use zeroize::Zeroizing;
 
 /// Displays a message on the STDOUT
-pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
+pub fn print_tty(prompt: &str) -> io::Result<()> {
     let mut stdout = io::stdout();
-    write!(stdout, "{}", prompt.to_string().as_str())?;
+    write!(stdout, "{}", prompt)?;
     stdout.flush()?;
     Ok(())
 }

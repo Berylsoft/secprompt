@@ -5,10 +5,10 @@ use std::os::unix::io::AsRawFd;
 use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
-pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
+pub fn print_tty(prompt: &str) -> io::Result<()> {
     let mut stream = std::fs::OpenOptions::new().write(true).open("/dev/tty")?;
     stream
-        .write_all(prompt.to_string().as_str().as_bytes())
+        .write_all(prompt.as_bytes())
         .and_then(|_| stream.flush())
 }
 

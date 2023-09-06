@@ -37,9 +37,9 @@ pub fn fix_line_issues(mut line: Zeroizing<String>) -> io::Result<Zeroizing<Stri
 }
 
 /// Prints a message to a writer
-pub fn print_writer(stream: &mut impl Write, prompt: impl ToString) -> io::Result<()> {
+pub fn print_writer(stream: &mut impl Write, prompt: &str) -> io::Result<()> {
     stream
-        .write_all(prompt.to_string().as_str().as_bytes())
+        .write_all(prompt.as_bytes())
         .and_then(|_| stream.flush())
 }
 
@@ -55,15 +55,14 @@ pub fn read_password_from_bufread(reader: &mut impl BufRead) -> io::Result<Zeroi
 pub fn prompt_password_from_bufread(
     reader: &mut impl BufRead,
     writer: &mut impl Write,
-    prompt: impl ToString,
+    prompt: &str,
 ) -> io::Result<Zeroizing<String>> {
-    print_writer(writer, prompt.to_string().as_str())
-        .and_then(|_| read_password_from_bufread(reader))
+    print_writer(writer, prompt).and_then(|_| read_password_from_bufread(reader))
 }
 
 /// Prompts on the TTY and then reads a password from TTY
-pub fn prompt_password(prompt: impl ToString) -> io::Result<Zeroizing<String>> {
-    print_tty(prompt.to_string().as_str()).and_then(|_| read_password())
+pub fn prompt_password(prompt: &str) -> io::Result<Zeroizing<String>> {
+    print_tty(prompt).and_then(|_| read_password())
 }
 
 #[cfg(test)]
