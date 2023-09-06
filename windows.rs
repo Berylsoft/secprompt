@@ -1,12 +1,11 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::windows::io::FromRawHandle;
-use winapi::shared::minwindef::LPDWORD;
-use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
-use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
-use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-use winapi::um::wincon::{ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT};
-use winapi::um::winnt::{
-    FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE,
+use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateFileA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+};
+use windows_sys::Win32::System::Console::{
+    GetConsoleMode, SetConsoleMode, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
 };
 use zeroize::Zeroizing;
 
@@ -14,20 +13,20 @@ use zeroize::Zeroizing;
 pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
     let handle = unsafe {
         CreateFileA(
-            b"CONOUT$\x00".as_ptr() as *const i8,
+            b"CONOUT$\x00".as_ptr(),
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
-            std::ptr::null_mut(),
+            std::ptr::null(),
             OPEN_EXISTING,
             0,
-            std::ptr::null_mut(),
+            0,
         )
     };
     if handle == INVALID_HANDLE_VALUE {
         return Err(io::Error::last_os_error());
     }
 
-    let mut stream = unsafe { std::fs::File::from_raw_handle(handle) };
+    let mut stream = unsafe { std::fs::File::from_raw_handle(handle as *mut _) };
 
     stream
         .write_all(prompt.to_string().as_str().as_bytes())
@@ -44,7 +43,7 @@ impl HiddenInput {
         let mut mode = 0;
 
         // Get the old mode so we can reset back to it when we are done
-        if unsafe { GetConsoleMode(handle, &mut mode as LPDWORD) } == 0 {
+        if unsafe { GetConsoleMode(handle, &mut mode as *mut _) } == 0 {
             return Err(io::Error::last_os_error());
         }
 
@@ -71,13 +70,13 @@ impl Drop for HiddenInput {
 pub fn read_password() -> io::Result<Zeroizing<String>> {
     let handle = unsafe {
         CreateFileA(
-            b"CONIN$\x00".as_ptr() as *const i8,
+            b"CONIN$\x00".as_ptr(),
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
-            std::ptr::null_mut(),
+            std::ptr::null(),
             OPEN_EXISTING,
             0,
-            std::ptr::null_mut(),
+            0,
         )
     };
 
@@ -85,7 +84,7 @@ pub fn read_password() -> io::Result<Zeroizing<String>> {
         return Err(io::Error::last_os_error());
     }
 
-    let mut stream = BufReader::new(unsafe { std::fs::File::from_raw_handle(handle) });
+    let mut stream = BufReader::new(unsafe { std::fs::File::from_raw_handle(handle as *mut _) });
     read_password_from_handle_with_hidden_input(&mut stream, handle)
 }
 
