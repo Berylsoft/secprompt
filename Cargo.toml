@@ -11,6 +11,7 @@ name = "secprompt"
 path = "lib.rs"
 
 [dependencies]
+zeroize = "1"
 
 [target.'cfg(unix)'.dependencies.libc]
 version = "0.2"

@@ -2,6 +2,7 @@ use std::io::{self, BufRead, Write};
 use std::mem;
 use std::os::unix::io::AsRawFd;
 use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
+use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
 pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
@@ -61,7 +62,7 @@ fn safe_tcgetattr(fd: c_int) -> io::Result<termios> {
 }
 
 /// Reads a password from the TTY
-pub fn read_password() -> io::Result<String> {
+pub fn read_password() -> io::Result<Zeroizing<String>> {
     let tty = std::fs::File::open("/dev/tty")?;
     let fd = tty.as_raw_fd();
     let mut reader = io::BufReader::new(tty);
@@ -73,8 +74,8 @@ pub fn read_password() -> io::Result<String> {
 fn read_password_from_fd_with_hidden_input(
     reader: &mut impl BufRead,
     fd: i32,
-) -> io::Result<String> {
-    let mut password = super::SafeString::new();
+) -> io::Result<Zeroizing<String>> {
+    let mut password = Zeroizing::<String>::default();
 
     let hidden_input = HiddenInput::new(fd)?;
 
@@ -82,5 +83,5 @@ fn read_password_from_fd_with_hidden_input(
 
     std::mem::drop(hidden_input);
 
-    super::fix_line_issues(password.into_inner())
+    super::fix_line_issues(password)
 }

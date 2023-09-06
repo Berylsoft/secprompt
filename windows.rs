@@ -8,6 +8,7 @@ use winapi::um::wincon::{ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT};
 use winapi::um::winnt::{
     FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE,
 };
+use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
 pub fn print_tty(prompt: impl ToString) -> io::Result<()> {
@@ -67,7 +68,7 @@ impl Drop for HiddenInput {
 }
 
 /// Reads a password from the TTY
-pub fn read_password() -> io::Result<String> {
+pub fn read_password() -> io::Result<Zeroizing<String>> {
     let handle = unsafe {
         CreateFileA(
             b"CONIN$\x00".as_ptr() as *const i8,
@@ -92,8 +93,8 @@ pub fn read_password() -> io::Result<String> {
 fn read_password_from_handle_with_hidden_input(
     reader: &mut impl BufRead,
     handle: HANDLE,
-) -> io::Result<String> {
-    let mut password = super::SafeString::new();
+) -> io::Result<Zeroizing<String>> {
+    let mut password = Zeroizing::<String>::default();
 
     let hidden_input = HiddenInput::new(handle)?;
 
@@ -108,5 +109,5 @@ fn read_password_from_handle_with_hidden_input(
 
     std::mem::drop(hidden_input);
 
-    super::fix_line_issues(password.into_inner())
+    super::fix_line_issues(password)
 }
