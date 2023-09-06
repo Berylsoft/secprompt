@@ -1,12 +1,15 @@
 use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
-use std::io::{self, BufRead, Write};
-use std::mem;
-use std::os::unix::io::AsRawFd;
+use std::{
+    fs::{File, OpenOptions},
+    io::{self, BufRead, BufReader, Write},
+    mem::MaybeUninit,
+    os::unix::io::AsRawFd,
+};
 use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
 pub fn print_tty(prompt: &str) -> io::Result<()> {
-    let mut stream = std::fs::OpenOptions::new().write(true).open("/dev/tty")?;
+    let mut stream = OpenOptions::new().write(true).open("/dev/tty")?;
     stream
         .write_all(prompt.as_bytes())
         .and_then(|_| stream.flush())
@@ -56,16 +59,16 @@ fn io_result(ret: c_int) -> io::Result<()> {
 }
 
 fn safe_tcgetattr(fd: c_int) -> io::Result<termios> {
-    let mut term = mem::MaybeUninit::<termios>::uninit();
-    io_result(unsafe { ::libc::tcgetattr(fd, term.as_mut_ptr()) })?;
+    let mut term = MaybeUninit::<termios>::uninit();
+    io_result(unsafe { libc::tcgetattr(fd, term.as_mut_ptr()) })?;
     Ok(unsafe { term.assume_init() })
 }
 
 /// Reads a password from the TTY
 pub fn read_password() -> io::Result<Zeroizing<String>> {
-    let tty = std::fs::File::open("/dev/tty")?;
+    let tty = File::open("/dev/tty")?;
     let fd = tty.as_raw_fd();
-    let mut reader = io::BufReader::new(tty);
+    let mut reader = BufReader::new(tty);
 
     read_password_from_fd_with_hidden_input(&mut reader, fd)
 }
@@ -81,7 +84,7 @@ fn read_password_from_fd_with_hidden_input(
 
     reader.read_line(&mut password)?;
 
-    std::mem::drop(hidden_input);
+    let _ = hidden_input;
 
     super::fix_line_issues(password)
 }

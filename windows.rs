@@ -1,11 +1,12 @@
-use std::io::{self, BufRead, BufReader, Write};
-use std::os::windows::io::FromRawHandle;
-use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE};
-use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+use std::{
+    fs::File,
+    io::{self, BufRead, BufReader, Write},
+    os::windows::io::FromRawHandle,
 };
-use windows_sys::Win32::System::Console::{
-    GetConsoleMode, SetConsoleMode, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
+use windows_sys::Win32::{
+    Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE},
+    Storage::FileSystem::{CreateFileA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
+    System::Console::{GetConsoleMode, SetConsoleMode, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT},
 };
 use zeroize::Zeroizing;
 
@@ -26,7 +27,7 @@ pub fn print_tty(prompt: &str) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
 
-    let mut stream = unsafe { std::fs::File::from_raw_handle(handle as *mut _) };
+    let mut stream = unsafe { File::from_raw_handle(handle as *mut _) };
 
     stream
         .write_all(prompt.as_bytes())
@@ -84,7 +85,7 @@ pub fn read_password() -> io::Result<Zeroizing<String>> {
         return Err(io::Error::last_os_error());
     }
 
-    let mut stream = BufReader::new(unsafe { std::fs::File::from_raw_handle(handle as *mut _) });
+    let mut stream = BufReader::new(unsafe { File::from_raw_handle(handle as *mut _) });
     read_password_from_handle_with_hidden_input(&mut stream, handle)
 }
 
@@ -106,7 +107,7 @@ fn read_password_from_handle_with_hidden_input(
         return Err(reader_return.unwrap_err());
     }
 
-    std::mem::drop(hidden_input);
+    let _ = hidden_input;
 
     super::fix_line_issues(password)
 }

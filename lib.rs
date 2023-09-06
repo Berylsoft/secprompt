@@ -11,10 +11,7 @@ use zeroize::Zeroizing;
 /// Normalizes the return of `read_line()` in the context of a CLI application
 pub fn fix_line_issues(mut line: Zeroizing<String>) -> io::Result<Zeroizing<String>> {
     if !line.ends_with('\n') {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "unexpected end of file",
-        ));
+        return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
     }
 
     // Remove the \n from the line.

@@ -1,4 +1,7 @@
-use std::io::{self, BufRead, Write};
+use std::{
+    fs::File,
+    io::{self, BufRead, BufReader, Write},
+};
 use zeroize::Zeroizing;
 
 /// Displays a message on the STDOUT
@@ -11,8 +14,8 @@ pub fn print_tty(prompt: &str) -> io::Result<()> {
 
 /// Reads a password from the TTY
 pub fn read_password() -> io::Result<Zeroizing<String>> {
-    let tty = std::fs::File::open("/dev/tty")?;
-    let mut reader = io::BufReader::new(tty);
+    let tty = File::open("/dev/tty")?;
+    let mut reader = BufReader::new(tty);
 
     read_password_from_fd_with_hidden_input(&mut reader)
 }
