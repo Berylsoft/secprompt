@@ -1,7 +1,7 @@
+use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
 use std::io::{self, BufRead, Write};
 use std::mem;
 use std::os::unix::io::AsRawFd;
-use libc::{c_int, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
 use zeroize::Zeroizing;
 
 /// Displays a message on the TTY
