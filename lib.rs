@@ -1,6 +1,6 @@
 #[cfg_attr(target_family = "unix", path = "unix.rs")]
 #[cfg_attr(target_family = "windows", path = "windows.rs")]
-#[cfg_attr(target_family = "wasm", path = "wasm.rs")]
+#[cfg_attr(target_family = "wasm", path = "fallback.rs")]
 mod platform;
 pub use platform::*;
 
@@ -34,32 +34,33 @@ pub fn fix_line_issues(mut line: Zeroizing<String>) -> io::Result<Zeroizing<Stri
 }
 
 /// Prints a message to a writer
-pub fn print_writer(stream: &mut impl Write, prompt: &str) -> io::Result<()> {
-    stream
-        .write_all(prompt.as_bytes())
-        .and_then(|_| stream.flush())
+pub fn print_general(stream: &mut impl Write, prompt: &str) -> io::Result<()> {
+    stream.write_all(prompt.as_bytes())?;
+    stream.flush()?;
+    Ok(())
 }
 
 /// Reads a password from anything that implements BufRead
-pub fn read_password_from_bufread(reader: &mut impl BufRead) -> io::Result<Zeroizing<String>> {
+pub fn read_password_general(reader: &mut impl BufRead) -> io::Result<Zeroizing<String>> {
     let mut password = Zeroizing::<String>::default();
     reader.read_line(&mut password)?;
-
     fix_line_issues(password)
 }
 
-/// Prompts on the TTY and then reads a password from anything that implements BufRead
-pub fn prompt_password_from_bufread(
+/// Prompts on a writer and then reads a password from anything that implements BufRead
+pub fn prompt_password_general(
     reader: &mut impl BufRead,
     writer: &mut impl Write,
     prompt: &str,
 ) -> io::Result<Zeroizing<String>> {
-    print_writer(writer, prompt).and_then(|_| read_password_from_bufread(reader))
+    print_general(writer, prompt)?;
+    read_password_general(reader)
 }
 
 /// Prompts on the TTY and then reads a password from TTY
 pub fn prompt_password(prompt: &str) -> io::Result<Zeroizing<String>> {
-    print_tty(prompt).and_then(|_| read_password())
+    print_tty(prompt)?;
+    read_password()
 }
 
 #[cfg(test)]
@@ -78,15 +79,15 @@ mod tests {
     fn can_read_from_redirected_input_many_times() {
         let mut reader_crlf = mock_input_crlf();
 
-        let response = super::read_password_from_bufread(&mut reader_crlf).unwrap();
+        let response = super::read_password_general(&mut reader_crlf).unwrap();
         assert_eq!(response.as_str(), "A mocked response.");
-        let response = super::read_password_from_bufread(&mut reader_crlf).unwrap();
+        let response = super::read_password_general(&mut reader_crlf).unwrap();
         assert_eq!(response.as_str(), "Another mocked response.");
 
         let mut reader_lf = mock_input_lf();
-        let response = super::read_password_from_bufread(&mut reader_lf).unwrap();
+        let response = super::read_password_general(&mut reader_lf).unwrap();
         assert_eq!(response.as_str(), "A mocked response.");
-        let response = super::read_password_from_bufread(&mut reader_lf).unwrap();
+        let response = super::read_password_general(&mut reader_lf).unwrap();
         assert_eq!(response.as_str(), "Another mocked response.");
     }
 }

@@ -1,20 +1,25 @@
+use crate::{print_general, read_password_general};
 use std::{
     fs::File,
-    io::{self, BufRead, BufReader, Write},
+    io::{self, BufReader},
     os::windows::io::FromRawHandle,
 };
-use windows_sys::Win32::{
-    Foundation::{GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE},
-    Storage::FileSystem::{CreateFileA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
-    System::Console::{GetConsoleMode, SetConsoleMode, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT},
+use windows_sys::{
+    core::s,
+    Win32::{
+        Foundation::{BOOL, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, TRUE},
+        Storage::FileSystem::{CreateFileA, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING},
+        System::Console::{
+            GetConsoleMode, SetConsoleMode, CONSOLE_MODE, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
+        },
+    },
 };
 use zeroize::Zeroizing;
 
-/// Displays a message on the TTY
-pub fn print_tty(prompt: &str) -> io::Result<()> {
+fn open_file(filename: *const u8) -> io::Result<(File, HANDLE)> {
     let handle = unsafe {
         CreateFileA(
-            b"CONOUT$\x00".as_ptr(),
+            filename,
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
             std::ptr::null(),
@@ -23,91 +28,59 @@ pub fn print_tty(prompt: &str) -> io::Result<()> {
             0,
         )
     };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
 
-    let mut stream = unsafe { File::from_raw_handle(handle as *mut _) };
-
-    stream
-        .write_all(prompt.as_bytes())
-        .and_then(|_| stream.flush())
-}
-
-struct HiddenInput {
-    mode: u32,
-    handle: HANDLE,
-}
-
-impl HiddenInput {
-    fn new(handle: HANDLE) -> io::Result<HiddenInput> {
-        let mut mode = 0;
-
-        // Get the old mode so we can reset back to it when we are done
-        if unsafe { GetConsoleMode(handle, &mut mode as *mut _) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        // We want to be able to read line by line, and we still want backspace to work
-        let new_mode_flags = ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT;
-        if unsafe { SetConsoleMode(handle, new_mode_flags) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        Ok(HiddenInput { mode, handle })
+    if handle != INVALID_HANDLE_VALUE {
+        Ok((unsafe { File::from_raw_handle(handle as *mut _) }, handle))
+    } else {
+        Err(io::Error::last_os_error())
     }
 }
 
-impl Drop for HiddenInput {
-    fn drop(&mut self) {
-        // Set the the mode back to normal
-        unsafe {
-            SetConsoleMode(self.handle, self.mode);
-        }
+// We want to be able to read line by line, and we still want backspace to work
+const NEW_MODE: CONSOLE_MODE = ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT;
+
+fn get_mode(handle: HANDLE) -> io::Result<CONSOLE_MODE> {
+    let mut mode: CONSOLE_MODE = 0;
+    let status: BOOL = unsafe { GetConsoleMode(handle, &mut mode as *mut _) };
+    if status == TRUE {
+        Ok(mode)
+    } else {
+        Err(io::Error::last_os_error())
     }
+}
+
+fn set_mode(handle: HANDLE, mode: CONSOLE_MODE) -> io::Result<()> {
+    let status: BOOL = unsafe { SetConsoleMode(handle, mode) };
+    if status == TRUE {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+/// Displays a message on the TTY
+pub fn print_tty(prompt: &str) -> io::Result<()> {
+    let (mut stream, _) = open_file(s!("CONOUT$"))?;
+    print_general(&mut stream, prompt)
 }
 
 /// Reads a password from the TTY
 pub fn read_password() -> io::Result<Zeroizing<String>> {
-    let handle = unsafe {
-        CreateFileA(
-            b"CONIN$\x00".as_ptr(),
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            std::ptr::null(),
-            OPEN_EXISTING,
-            0,
-            0,
-        )
-    };
+    let (stream, handle) = open_file(s!("CONIN$"))?;
+    let mut reader = BufReader::new(stream);
 
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
+    let old_mode = get_mode(handle)?;
 
-    let mut stream = BufReader::new(unsafe { File::from_raw_handle(handle as *mut _) });
-    read_password_from_handle_with_hidden_input(&mut stream, handle)
-}
+    set_mode(handle, NEW_MODE)?;
 
-/// Reads a password from a given file handle
-fn read_password_from_handle_with_hidden_input(
-    reader: &mut impl BufRead,
-    handle: HANDLE,
-) -> io::Result<Zeroizing<String>> {
-    let mut password = Zeroizing::<String>::default();
-
-    let hidden_input = HiddenInput::new(handle)?;
-
-    let reader_return = reader.read_line(&mut password);
+    let read_result = read_password_general(&mut reader);
 
     // Newline for windows which otherwise prints on the same line.
     println!();
 
-    if reader_return.is_err() {
-        return Err(reader_return.unwrap_err());
-    }
+    let password = read_result?;
 
-    let _ = hidden_input;
+    let _ = set_mode(handle, old_mode);
 
-    super::fix_line_issues(password)
+    Ok(password)
 }

@@ -1,90 +1,62 @@
+use crate::{print_general, read_password_general};
 use libc::{c_int, tcgetattr, tcsetattr, termios, ECHO, ECHONL, TCSANOW};
 use std::{
     fs::{File, OpenOptions},
-    io::{self, BufRead, BufReader, Write},
+    io::{self, BufReader},
     mem::MaybeUninit,
     os::unix::io::AsRawFd,
 };
 use zeroize::Zeroizing;
 
+#[inline]
+fn cvt(ret: c_int) -> io::Result<()> {
+    if ret == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+fn change_mode(mut mode: termios) -> termios {
+    // Hide the password. This is what makes this function useful.
+    mode.c_lflag &= !ECHO;
+
+    // But don't hide the NL character when the user hits ENTER.
+    mode.c_lflag |= ECHONL;
+
+    mode
+}
+
+fn get_mode(fd: c_int) -> io::Result<termios> {
+    let mut term = MaybeUninit::<termios>::uninit();
+    cvt(unsafe { tcgetattr(fd, term.as_mut_ptr()) })?;
+    Ok(unsafe { term.assume_init() })
+}
+
+fn set_mode(fd: c_int, mode: &termios) -> io::Result<()> {
+    cvt(unsafe { tcsetattr(fd, TCSANOW, termios.as_ptr()) })
+}
+
 /// Displays a message on the TTY
 pub fn print_tty(prompt: &str) -> io::Result<()> {
     let mut stream = OpenOptions::new().write(true).open("/dev/tty")?;
-    stream
-        .write_all(prompt.as_bytes())
-        .and_then(|_| stream.flush())
-}
-
-struct HiddenInput {
-    fd: i32,
-    term_orig: termios,
-}
-
-impl HiddenInput {
-    fn new(fd: i32) -> io::Result<HiddenInput> {
-        // Make two copies of the terminal settings. The first one will be modified
-        // and the second one will act as a backup for when we want to set the
-        // terminal back to its original state.
-        let mut term = safe_tcgetattr(fd)?;
-        let term_orig = safe_tcgetattr(fd)?;
-
-        // Hide the password. This is what makes this function useful.
-        term.c_lflag &= !ECHO;
-
-        // But don't hide the NL character when the user hits ENTER.
-        term.c_lflag |= ECHONL;
-
-        // Save the settings for now.
-        io_result(unsafe { tcsetattr(fd, TCSANOW, &term) })?;
-
-        Ok(HiddenInput { fd, term_orig })
-    }
-}
-
-impl Drop for HiddenInput {
-    fn drop(&mut self) {
-        // Set the the mode back to normal
-        unsafe {
-            tcsetattr(self.fd, TCSANOW, &self.term_orig);
-        }
-    }
-}
-
-/// Turns a C function return into an IO Result
-fn io_result(ret: c_int) -> io::Result<()> {
-    match ret {
-        0 => Ok(()),
-        _ => Err(io::Error::last_os_error()),
-    }
-}
-
-fn safe_tcgetattr(fd: c_int) -> io::Result<termios> {
-    let mut term = MaybeUninit::<termios>::uninit();
-    io_result(unsafe { tcgetattr(fd, term.as_mut_ptr()) })?;
-    Ok(unsafe { term.assume_init() })
+    print_general(&mut stream, prompt)
 }
 
 /// Reads a password from the TTY
 pub fn read_password() -> io::Result<Zeroizing<String>> {
-    let tty = File::open("/dev/tty")?;
-    let fd = tty.as_raw_fd();
-    let mut reader = BufReader::new(tty);
+    let stream = File::open("/dev/tty")?;
+    let fd = stream.as_raw_fd();
+    let mut reader = BufReader::new(stream);
 
-    read_password_from_fd_with_hidden_input(&mut reader, fd)
-}
+    let old_mode = get_mode(fd)?;
 
-/// Reads a password from a given file descriptor
-fn read_password_from_fd_with_hidden_input(
-    reader: &mut impl BufRead,
-    fd: i32,
-) -> io::Result<Zeroizing<String>> {
-    let mut password = Zeroizing::<String>::default();
+    let new_mode = change_mode(old_mode);
+    set_mode(fd, &new_mode)?;
 
-    let hidden_input = HiddenInput::new(fd)?;
+    let password = read_password_general(&mut reader)?;
 
-    reader.read_line(&mut password)?;
+    let _ = set_mode(fd, &old_mode);
 
-    let _ = hidden_input;
-
-    super::fix_line_issues(password)
+    Ok(password)
 }
