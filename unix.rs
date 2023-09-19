@@ -28,13 +28,13 @@ fn change_mode(mut mode: termios) -> termios {
 }
 
 fn get_mode(fd: c_int) -> io::Result<termios> {
-    let mut term = MaybeUninit::<termios>::uninit();
-    cvt(unsafe { tcgetattr(fd, term.as_mut_ptr()) })?;
-    Ok(unsafe { term.assume_init() })
+    let mut mode = MaybeUninit::<termios>::uninit();
+    cvt(unsafe { tcgetattr(fd, mode.as_mut_ptr()) })?;
+    Ok(unsafe { mode.assume_init() })
 }
 
 fn set_mode(fd: c_int, mode: &termios) -> io::Result<()> {
-    cvt(unsafe { tcsetattr(fd, TCSANOW, termios.as_ptr()) })
+    cvt(unsafe { tcsetattr(fd, TCSANOW, mode as *const _) })
 }
 
 /// Displays a message on the TTY
